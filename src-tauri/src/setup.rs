@@ -1,21 +1,22 @@
+use crate::*;
 use anyhow::Context;
 
 pub fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     log::info!("setup app");
 
-    setup_window_main(app.handle())?;
+    utils::create_window_main(app.handle())?;
     setup_tray(app.handle())?;
 
     Ok(())
 }
 
-pub fn plugin_clipboard() -> tauri::plugin::TauriPlugin<tauri::Wry> {
+pub fn setup_plugin_clipboard() -> anyhow::Result<tauri::plugin::TauriPlugin<tauri::Wry>> {
     log::info!("setup plugin clipboard");
 
-    tauri_plugin_clipboard_manager::init()
+    Ok(tauri_plugin_clipboard_manager::init())
 }
 
-pub fn plugin_global_shortcut() -> tauri::plugin::TauriPlugin<tauri::Wry> {
+pub fn setup_plugin_global_shortcut() -> anyhow::Result<tauri::plugin::TauriPlugin<tauri::Wry>> {
     log::info!("setup plugin global_shortcut");
 
     let key = tauri_plugin_global_shortcut::Shortcut::new(
@@ -23,106 +24,32 @@ pub fn plugin_global_shortcut() -> tauri::plugin::TauriPlugin<tauri::Wry> {
         tauri_plugin_global_shortcut::Code::Space,
     );
 
-    tauri_plugin_global_shortcut::Builder::new()
+    // no occur panic in handle fn
+    let handle = |app: &tauri::AppHandle,
+                  _: &tauri_plugin_global_shortcut::Shortcut,
+                  event: tauri_plugin_global_shortcut::ShortcutEvent| {
+        if event.state() == tauri_plugin_global_shortcut::ShortcutState::Pressed {
+            let Ok(position) = utils::get_window_center(app) else {
+                log::error!("failed to get focus window center");
+                return;
+            };
+            let Ok(()) = utils::locate_window_main(app, position) else {
+                log::error!("failed to locate window main");
+                return;
+            };
+            let Ok(()) = utils::show_window_main(app) else {
+                log::error!("failed to show window main");
+                return;
+            };
+        }
+    };
+
+    let plugin = tauri_plugin_global_shortcut::Builder::new()
         .with_shortcut(key)
         .unwrap()
-        .with_handler(move |app, _, event| {
-            if event.state() == tauri_plugin_global_shortcut::ShortcutState::Pressed {
-                let position = get_window_center().unwrap();
-                locate_window_main(app, position).unwrap();
-                show_window_main(app).unwrap();
-            }
-        })
-        .build()
-}
-
-pub fn setup_window_main(app: &tauri::AppHandle) -> anyhow::Result<()> {
-    log::info!("setup window main");
-
-    let url = tauri::WebviewUrl::App("main".into());
-    tauri::WebviewWindowBuilder::new(app, "main", url)
-        .title("Quicklime")
-        .always_on_top(true)
-        .closable(false)
-        .decorations(false)
-        .fullscreen(false)
-        .maximizable(false)
-        .minimizable(false)
-        .resizable(false)
-        .shadow(false)
-        .skip_taskbar(true)
-        .visible(false)
-        .build()?;
-
-    Ok(())
-}
-
-pub fn show_window_main(app: &tauri::AppHandle) -> anyhow::Result<()> {
-    log::info!("show window main");
-
-    let window =
-        tauri::Manager::get_webview_window(app, "main").context("window main is not found")?;
-    window.show()?;
-    window.set_focus()?;
-
-    Ok(())
-}
-
-pub fn hide_window_main(app: &tauri::AppHandle) -> anyhow::Result<()> {
-    log::info!("hide window main");
-
-    let window =
-        tauri::Manager::get_webview_window(app, "main").context("window main is not found")?;
-    window.hide()?;
-
-    Ok(())
-}
-
-fn get_window_center() -> anyhow::Result<tauri::Position> {
-    log::info!("get forground window center position");
-
-    let mut lprect = windows::Win32::Foundation::RECT::default();
-
-    unsafe {
-        let hwnd = windows::Win32::UI::WindowsAndMessaging::GetForegroundWindow();
-        windows::Win32::UI::WindowsAndMessaging::GetWindowRect(hwnd, &mut lprect)
-            .context("failed to get window rect")?;
-    }
-
-    let x = (lprect.right + lprect.left) as f64 / 2.0;
-    let y = (lprect.top + lprect.bottom) as f64 / 2.0;
-    Ok(tauri::Position::Logical(tauri::LogicalPosition::new(x, y)))
-}
-
-fn locate_window_main(app: &tauri::AppHandle, position: tauri::Position) -> anyhow::Result<()> {
-    const W_WIDTH: f64 = 1024.0;
-    const W_HEIGHT: f64 = 512.0;
-
-    log::info!("locate window main");
-
-    let window =
-        tauri::Manager::get_webview_window(app, "main").context("window main is not found")?;
-
-    let size = tauri::Size::Logical(tauri::LogicalSize::new(W_WIDTH, W_HEIGHT));
-    window.set_size(size).unwrap();
-
-    let tauri::Position::Logical(position) = position else {
-        anyhow::bail!("position must be logical type")
-    };
-    let x = position.x - W_WIDTH / 2.0;
-    let y = position.y - W_HEIGHT / 2.0;
-    let position = tauri::Position::Logical(tauri::LogicalPosition::new(x, y));
-    window.set_position(position).unwrap();
-    Ok(())
-}
-
-pub fn setup_window_config(app: &tauri::AppHandle) -> anyhow::Result<()> {
-    let url = tauri::WebviewUrl::App("config".into());
-    tauri::WebviewWindowBuilder::new(app, "config", url)
-        .title("Quicklime")
-        .build()?;
-
-    Ok(())
+        .with_handler(handle)
+        .build();
+    Ok(plugin)
 }
 
 pub fn setup_tray(app: &tauri::AppHandle) -> anyhow::Result<()> {
@@ -137,31 +64,45 @@ pub fn setup_tray(app: &tauri::AppHandle) -> anyhow::Result<()> {
     let menu_quit = tauri::menu::MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
     let menu =
         tauri::menu::Menu::with_items(app, &[&menu_show, &menu_hide, &menu_config, &menu_quit])?;
+
+    // no occur panic in handle fn
     let handle = |app: &tauri::AppHandle, event: tauri::menu::MenuEvent| {
-        let ret = match event.id().as_ref() {
+        match event.id().as_ref() {
             "show" => {
                 log::info!("send event: show window main");
-                show_window_main(app)
+                match utils::show_window_main(app) {
+                    Ok(_) => {}
+                    Err(e) => {
+                        log::error!("error occured {}", e);
+                    }
+                };
             }
             "hide" => {
                 log::info!("send event: hide window main");
-                hide_window_main(app)
+                match utils::hide_window_main(app) {
+                    Ok(_) => {}
+                    Err(e) => {
+                        log::error!("error occured {}", e);
+                    }
+                };
             }
             "config" => {
                 log::info!("send event: setup window config");
-                setup_window_config(app)
+                match utils::create_window_config(app) {
+                    Ok(_) => {}
+                    Err(e) => {
+                        log::error!("error occured {}", e);
+                    }
+                };
             }
             "quit" => {
                 log::info!("send event: quit app");
                 app.exit(0);
-                Ok(())
             }
-            _ => Err(anyhow::anyhow!("invalid event id")),
+            _ => {
+                log::error!("invalid event id");
+            }
         };
-        match ret {
-            Ok(()) => {}
-            Err(e) => log::error!("tray menu handler: {:?}", e),
-        }
     };
 
     tauri::tray::TrayIconBuilder::new()
@@ -174,8 +115,17 @@ pub fn setup_tray(app: &tauri::AppHandle) -> anyhow::Result<()> {
     Ok(())
 }
 
-pub fn on_window_event(window: &tauri::Window, event: &tauri::WindowEvent) {
-    if let tauri::WindowEvent::Focused(false) = event {
-        window.hide().unwrap();
-    }
+pub fn setup_window_event() -> anyhow::Result<impl Fn(&tauri::Window, &tauri::WindowEvent)> {
+    // no occur panic in handle fn
+    let handle = |window: &tauri::Window, event: &tauri::WindowEvent| {
+        if let tauri::WindowEvent::Focused(false) = event {
+            let app = tauri::Manager::app_handle(window);
+
+            match utils::hide_window_main(app) {
+                Ok(_) => {}
+                Err(e) => log::error!("error occured {}", e),
+            }
+        }
+    };
+    Ok(handle)
 }
