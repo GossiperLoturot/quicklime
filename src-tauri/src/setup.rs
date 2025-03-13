@@ -29,17 +29,26 @@ pub fn setup_plugin_global_shortcut() -> anyhow::Result<tauri::plugin::TauriPlug
                   _: &tauri_plugin_global_shortcut::Shortcut,
                   event: tauri_plugin_global_shortcut::ShortcutEvent| {
         if event.state() == tauri_plugin_global_shortcut::ShortcutState::Pressed {
-            let Ok(position) = utils::get_window_center(app) else {
-                log::error!("failed to get focus window center");
-                return;
+            let position = match utils::get_window_center(app) {
+                Ok(x) => x,
+                Err(e) => {
+                    log::error!("error occured {}", e);
+                    return;
+                }
             };
-            let Ok(()) = utils::locate_window_main(app, position) else {
-                log::error!("failed to locate window main");
-                return;
+            match utils::locate_window_main(app, position) {
+                Ok(_) => {}
+                Err(e) => {
+                    log::error!("error occured {}", e);
+                    return;
+                }
             };
-            let Ok(()) = utils::show_window_main(app) else {
-                log::error!("failed to show window main");
-                return;
+            match utils::show_window_main(app) {
+                Ok(_) => {}
+                Err(e) => {
+                    log::error!("error occured {}", e);
+                    return;
+                }
             };
         }
     };

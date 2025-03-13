@@ -1,48 +1,57 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
+  import { listen } from "@tauri-apps/api/event";
 
-  let name = $state("");
-  let greetMsg = $state("");
+  let text = $state("");
+  let inputRef: HTMLElement;
 
-  async function greet(event: Event) {
+  async function onConfirmInput(event: Event) {
     event.preventDefault();
     // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    greetMsg = await invoke("greet", { name });
+    await invoke("on_confirm_input", { text });
   }
+
+  async function onChangeInput(event: Event) {
+    event.preventDefault();
+    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
+    await invoke("on_change_input", { text });
+  }
+
+  function onKeyDown(event: KeyboardEvent) {
+    if (event.key === "Escape") invoke("on_exit_input", {});
+  }
+
+  function onShowWindow() {
+    if (inputRef) inputRef.focus();
+  }
+
+  function onHideWindow() {
+    text = "";
+  }
+
+  onMount(() => {
+    document.addEventListener("keydown", onKeyDown);
+
+    const unlisten0 = listen<void>("show_window", onShowWindow);
+    const unlisten1 = listen<void>("hide_window", onHideWindow);
+
+    return async () => {
+      document.removeEventListener("keydown", onKeyDown);
+      (await unlisten0)();
+      (await unlisten1)();
+    };
+  });
 </script>
 
 <main class="container">
-  <h1>Welcome to Tauri + Svelte</h1>
-
-  <div class="row">
-    <a href="https://vitejs.dev" target="_blank">
-      <img src="/vite.svg" class="logo vite" alt="Vite Logo" />
-    </a>
-    <a href="https://tauri.app" target="_blank">
-      <img src="/tauri.svg" class="logo tauri" alt="Tauri Logo" />
-    </a>
-    <a href="https://kit.svelte.dev" target="_blank">
-      <img src="/svelte.svg" class="logo svelte-kit" alt="SvelteKit Logo" />
-    </a>
-  </div>
-  <p>Click on the Tauri, Vite, and SvelteKit logos to learn more.</p>
-
-  <form class="row" onsubmit={greet}>
-    <input id="greet-input" placeholder="Enter a name..." bind:value={name} />
-    <button type="submit">Greet</button>
+  <form class="row" onsubmit={onConfirmInput}>
+    <input id="input" placeholder="Enter any text..." bind:this={inputRef} bind:value={text} oninput={onChangeInput} />
+    <button type="submit">Confirm</button>
   </form>
-  <p>{greetMsg}</p>
 </main>
 
 <style>
-.logo.vite:hover {
-  filter: drop-shadow(0 0 2em #747bff);
-}
-
-.logo.svelte-kit:hover {
-  filter: drop-shadow(0 0 2em #ff3e00);
-}
-
 :root {
   font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
   font-size: 16px;
@@ -66,17 +75,6 @@
   flex-direction: column;
   justify-content: center;
   text-align: center;
-}
-
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: 0.75s;
-}
-
-.logo.tauri:hover {
-  filter: drop-shadow(0 0 2em #24c8db);
 }
 
 .row {
@@ -129,7 +127,7 @@ button {
   outline: none;
 }
 
-#greet-input {
+#input {
   margin-right: 5px;
 }
 

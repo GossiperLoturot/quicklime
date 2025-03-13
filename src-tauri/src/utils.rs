@@ -39,6 +39,7 @@ pub fn show_window_main(app: &tauri::AppHandle) -> anyhow::Result<()> {
     if !window.is_visible()? {
         window.show()?;
         window.set_focus()?;
+        tauri::Emitter::emit(&window, "show_window", ())?;
     }
 
     Ok(())
@@ -51,6 +52,7 @@ pub fn hide_window_main(app: &tauri::AppHandle) -> anyhow::Result<()> {
         tauri::Manager::get_webview_window(app, "main").context("window main is not found")?;
     if window.is_visible()? {
         window.hide()?;
+        tauri::Emitter::emit(&window, "hide_window", ())?;
     }
 
     Ok(())
