@@ -1,13 +1,9 @@
 use crate::*;
 use anyhow::Context;
 
-pub fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
-    log::info!("setup app");
-
-    utils::create_window_main(app.handle())?;
-    setup_tray(app.handle())?;
-
-    Ok(())
+pub struct AppState {
+    pub tx_input: crossbeam_channel::Sender<String>,
+    pub _th_input: tauri::async_runtime::JoinHandle<()>,
 }
 
 pub fn setup_plugin_clipboard() -> anyhow::Result<tauri::plugin::TauriPlugin<tauri::Wry>> {
@@ -30,7 +26,7 @@ pub fn setup_plugin_global_shortcut() -> anyhow::Result<tauri::plugin::TauriPlug
                   event: tauri_plugin_global_shortcut::ShortcutEvent| {
         if event.state() == tauri_plugin_global_shortcut::ShortcutState::Pressed {
             let position = match utils::get_window_center(app) {
-                Ok(x) => x,
+                Ok(position) => position,
                 Err(e) => {
                     log::error!("error occured {}", e);
                     return;
@@ -59,6 +55,62 @@ pub fn setup_plugin_global_shortcut() -> anyhow::Result<tauri::plugin::TauriPlug
         .with_handler(handle)
         .build();
     Ok(plugin)
+}
+
+pub fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
+    log::info!("setup app");
+
+    utils::create_window_main(app.handle())?;
+    setup_channel(app.handle())?;
+    setup_tray(app.handle())?;
+
+    Ok(())
+}
+
+pub fn setup_channel(app: &tauri::AppHandle) -> anyhow::Result<()> {
+    let (tx_input, rx_input) = crossbeam_channel::unbounded::<String>();
+
+    let app_clone= app.clone();
+    let _th_input = tauri::async_runtime::spawn(async move {
+        loop {
+            let Ok(input) = rx_input.recv() else  {
+                continue;
+            };
+
+            if !rx_input.is_empty() {
+                continue;
+            }
+
+            log::info!("input: {}", input);
+            let instant = std::time::Instant::now();
+
+            let output = match utils::request_fix(input.as_str()).await {
+                Ok(output) => output,
+                Err(e) => {
+                    log::error!("error occured {}", e);
+                    continue;
+                },
+            };
+            match tauri::Emitter::emit(&app_clone, "", output) {
+                Ok(_) => {},
+                Err(e) => {
+                    log::error!("error occured {}", e);
+                    continue;
+                }
+            }
+
+            let duration = std::time::Duration::from_millis(500).saturating_sub(instant.elapsed());
+            tokio::time::sleep(duration).await;
+        }
+    });
+
+    let state = AppState {
+        tx_input,
+        _th_input
+    };
+    tauri::Manager::manage(app, state);
+
+    Ok(())
 }
 
 pub fn setup_tray(app: &tauri::AppHandle) -> anyhow::Result<()> {
@@ -132,7 +184,10 @@ pub fn setup_window_event() -> anyhow::Result<impl Fn(&tauri::Window, &tauri::Wi
 
             match utils::hide_window_main(app) {
                 Ok(_) => {}
-                Err(e) => log::error!("error occured {}", e),
+                Err(e) => {
+                    log::error!("error occured {}", e);
+                    return;
+                }
             }
         }
     };

@@ -4,7 +4,6 @@
   import { listen } from "@tauri-apps/api/event";
 
   let text = $state("");
-  let inputRef: HTMLElement;
 
   async function onConfirmInput(event: Event) {
     event.preventDefault();
@@ -23,7 +22,7 @@
   }
 
   function onShowWindow() {
-    if (inputRef) inputRef.focus();
+    location.reload();
   }
 
   function onHideWindow() {
@@ -46,7 +45,15 @@
 
 <main class="container">
   <form class="row" onsubmit={onConfirmInput}>
-    <input id="input" placeholder="Enter any text..." bind:this={inputRef} bind:value={text} oninput={onChangeInput} />
+    <input
+      id="input"
+      placeholder="Enter any text..."
+      autocapitalize="none"
+      autocomplete="off"
+      autofocus
+      bind:value={text}
+      oninput={onChangeInput}
+    />
     <button type="submit">Confirm</button>
   </form>
 </main>

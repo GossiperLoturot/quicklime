@@ -81,8 +81,8 @@ pub fn get_window_center(app: &tauri::AppHandle) -> anyhow::Result<tauri::Positi
 }
 
 pub fn locate_window_main(app: &tauri::AppHandle, position: tauri::Position) -> anyhow::Result<()> {
-    const W_WIDTH: f64 = 1024.0;
-    const W_HEIGHT: f64 = 512.0;
+    const W_WIDTH: f64 = 512.0;
+    const W_HEIGHT: f64 = 256.0;
 
     log::info!("locate window main");
 
@@ -141,4 +141,23 @@ fn send_input(
     pinput.Anonymous.ki.dwExtraInfo = EXTRA_INFO;
     let cbsize = std::mem::size_of_val(&pinput) as i32;
     unsafe { windows::Win32::UI::Input::KeyboardAndMouse::SendInput(&[pinput], cbsize) };
+}
+
+pub async fn request_fix(text: &str) -> anyhow::Result<String> {
+    const XAI_API_KEY: &str = env!("XAI_API_KEY");
+
+    let prompt = format!("{{\"model\":\"grok-2-latest\",\"messages\":[{{\"role\":\"system\",\"content\":\"あなたは日本語から英語への翻訳を行うアシスタントです。ユーザが入力した日本語を、正しい英語へと翻訳してください。\"}},{{\"role\":\"user\",\"content\":\"{}\"}}]}}", text);
+
+    let client = tauri_plugin_http::reqwest::Client::new();
+    let response = client
+        .post("https://api.x.ai/v1/chat/completions")
+        .bearer_auth(XAI_API_KEY)
+        .header("Content-Type", "application/json")
+        .body(prompt)
+        .send()
+        .await?;
+
+    log::info!("{:?}", response.text().await);
+
+    Err(anyhow::anyhow!("Unimplementation"))
 }
