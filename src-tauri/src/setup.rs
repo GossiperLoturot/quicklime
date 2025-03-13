@@ -70,10 +70,10 @@ pub fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
 pub fn setup_channel(app: &tauri::AppHandle) -> anyhow::Result<()> {
     let (tx_input, rx_input) = crossbeam_channel::unbounded::<String>();
 
-    let app_clone= app.clone();
+    let app_clone = app.clone();
     let _th_input = tauri::async_runtime::spawn(async move {
         loop {
-            let Ok(input) = rx_input.recv() else  {
+            let Ok(input) = rx_input.recv() else {
                 continue;
             };
 
@@ -89,10 +89,10 @@ pub fn setup_channel(app: &tauri::AppHandle) -> anyhow::Result<()> {
                 Err(e) => {
                     log::error!("error occured {}", e);
                     continue;
-                },
+                }
             };
-            match tauri::Emitter::emit(&app_clone, "", output) {
-                Ok(_) => {},
+            match tauri::Emitter::emit(&app_clone, "update_output", output) {
+                Ok(_) => {}
                 Err(e) => {
                     log::error!("error occured {}", e);
                     continue;
@@ -106,7 +106,7 @@ pub fn setup_channel(app: &tauri::AppHandle) -> anyhow::Result<()> {
 
     let state = AppState {
         tx_input,
-        _th_input
+        _th_input,
     };
     tauri::Manager::manage(app, state);
 

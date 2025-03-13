@@ -1,44 +1,52 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { invoke } from "@tauri-apps/api/core";
-  import { listen } from "@tauri-apps/api/event";
+  import * as core from "@tauri-apps/api/core";
+  import * as event from "@tauri-apps/api/event";
 
-  let text = $state("");
+  let inputText = $state("");
+  let outputText = $state("");
 
   async function onConfirmInput(event: Event) {
     event.preventDefault();
     // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    await invoke("on_confirm_input", { text });
+    await core.invoke("on_confirm_input", { text: outputText });
   }
 
   async function onChangeInput(event: Event) {
     event.preventDefault();
     // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    await invoke("on_change_input", { text });
+    await core.invoke("on_change_input", { text: inputText });
   }
 
   function onKeyDown(event: KeyboardEvent) {
-    if (event.key === "Escape") invoke("on_exit_input", {});
+    if (event.key === "Escape") core.invoke("on_exit_input", {});
   }
 
-  function onShowWindow() {
+  function onShowWindow(event: event.Event<void>) {
     location.reload();
   }
 
-  function onHideWindow() {
-    text = "";
+  function onHideWindow(event: event.Event<void>) {
+    inputText = "";
+    outputText = "";
+  }
+
+  function onUpdateOutput(event: event.Event<string>) {
+    outputText = event.payload;
   }
 
   onMount(() => {
     document.addEventListener("keydown", onKeyDown);
 
-    const unlisten0 = listen<void>("show_window", onShowWindow);
-    const unlisten1 = listen<void>("hide_window", onHideWindow);
+    const unlisten0 = event.listen<void>("show_window", onShowWindow);
+    const unlisten1 = event.listen<void>("hide_window", onHideWindow);
+    const unlisten2 = event.listen<string>("update_output", onUpdateOutput);
 
     return async () => {
       document.removeEventListener("keydown", onKeyDown);
       (await unlisten0)();
       (await unlisten1)();
+      (await unlisten2)();
     };
   });
 </script>
@@ -51,11 +59,12 @@
       autocapitalize="none"
       autocomplete="off"
       autofocus
-      bind:value={text}
+      bind:value={inputText}
       oninput={onChangeInput}
     />
     <button type="submit">Confirm</button>
   </form>
+  <p>{outputText}</p>
 </main>
 
 <style>

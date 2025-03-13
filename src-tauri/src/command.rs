@@ -44,7 +44,7 @@ pub fn on_change_input(app: tauri::AppHandle, text: &str) {
     let state = tauri::Manager::state::<setup::AppState>(&app);
 
     match state.tx_input.send(text.into()) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => {
             log::error!("error occured {}", e);
             return;

@@ -146,18 +146,36 @@ fn send_input(
 pub async fn request_fix(text: &str) -> anyhow::Result<String> {
     const XAI_API_KEY: &str = env!("XAI_API_KEY");
 
-    let prompt = format!("{{\"model\":\"grok-2-latest\",\"messages\":[{{\"role\":\"system\",\"content\":\"あなたは日本語から英語への翻訳を行うアシスタントです。ユーザが入力した日本語を、正しい英語へと翻訳してください。\"}},{{\"role\":\"user\",\"content\":\"{}\"}}]}}", text);
+    let prompt = serde_json::json!({
+        "model": "grok-2-latest",
+        "messages": [
+            {
+                "role": "system",
+                "content": "あなたは英語への翻訳を行うアシスタントです。ユーザが入力した文章を、正しい英語へと翻訳してください。出力は翻訳された文章です。"
+            },
+            {
+                "role": "user",
+                "content": text
+            }
+        ]
+    });
 
     let client = tauri_plugin_http::reqwest::Client::new();
     let response = client
         .post("https://api.x.ai/v1/chat/completions")
         .bearer_auth(XAI_API_KEY)
         .header("Content-Type", "application/json")
-        .body(prompt)
+        .json(&prompt)
         .send()
         .await?;
 
-    log::info!("{:?}", response.text().await);
-
-    Err(anyhow::anyhow!("Unimplementation"))
+    let data = response.json::<serde_json::Value>().await?;
+    let path = jsonpath_rust::JsonPath::try_from("$.choices[*].message.content")?;
+    let item = path
+        .find(&data)
+        .as_array()
+        .and_then(|arr| arr.iter().flat_map(|item| item.as_str()).next())
+        .unwrap_or("")
+        .into();
+    Ok(item)
 }
