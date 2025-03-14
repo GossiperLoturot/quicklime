@@ -84,7 +84,7 @@ pub fn setup_channel(app: &tauri::AppHandle) -> anyhow::Result<()> {
             log::info!("input: {}", input);
             let instant = std::time::Instant::now();
 
-            let output = match utils::request_fix(input.as_str()).await {
+            let output = match utils::request_translate(input.as_str()).await {
                 Ok(output) => output,
                 Err(e) => {
                     log::error!("error occured {}", e);

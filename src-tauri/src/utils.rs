@@ -143,8 +143,8 @@ fn send_input(
     unsafe { windows::Win32::UI::Input::KeyboardAndMouse::SendInput(&[pinput], cbsize) };
 }
 
-pub async fn request_fix(text: &str) -> anyhow::Result<String> {
-    const XAI_API_KEY: &str = env!("XAI_API_KEY");
+pub async fn request_translate(text: &str) -> anyhow::Result<String> {
+    let client = tauri_plugin_http::reqwest::Client::new();
 
     let prompt = serde_json::json!({
         "model": "grok-2-latest",
@@ -159,15 +159,34 @@ pub async fn request_fix(text: &str) -> anyhow::Result<String> {
             }
         ]
     });
-
-    let client = tauri_plugin_http::reqwest::Client::new();
     let response = client
         .post("https://api.x.ai/v1/chat/completions")
-        .bearer_auth(XAI_API_KEY)
+        .bearer_auth(env!("XAI_TOKEN"))
         .header("Content-Type", "application/json")
         .json(&prompt)
         .send()
         .await?;
+
+    // let prompt = serde_json::json!({
+    //     "model": "gpt-4o-mini",
+    //     "messages": [
+    //         {
+    //             "role": "system",
+    //             "content": "あなたは英語への翻訳を行うアシスタントです。ユーザが入力した文章を、正しい英語へと翻訳してください。出力は翻訳された文章です。"
+    //         },
+    //         {
+    //             "role": "user",
+    //             "content": text
+    //         }
+    //     ]
+    // });
+    // let response = client
+    //     .post("https://api.openai.com/v1/chat/completions")
+    //     .bearer_auth(env!("OPENAI_TOKEN"))
+    //     .header("Content-Type", "application/json")
+    //     .json(&prompt)
+    //     .send()
+    //     .await?;
 
     let data = response.json::<serde_json::Value>().await?;
     let path = jsonpath_rust::JsonPath::try_from("$.choices[*].message.content")?;
