@@ -17,6 +17,7 @@ pub fn create_window_main(app: &tauri::AppHandle) -> anyhow::Result<()> {
         .skip_taskbar(true)
         .visible(false)
         .focused(false)
+        .transparent(true)
         .build()?;
 
     Ok(())
@@ -82,7 +83,7 @@ pub fn get_window_center(app: &tauri::AppHandle) -> anyhow::Result<tauri::Positi
 
 pub fn locate_window_main(app: &tauri::AppHandle, position: tauri::Position) -> anyhow::Result<()> {
     const W_WIDTH: f64 = 512.0;
-    const W_HEIGHT: f64 = 256.0;
+    const W_HEIGHT: f64 = 512.0;
 
     log::info!("locate window main");
 
@@ -143,15 +144,25 @@ fn send_input(
     unsafe { windows::Win32::UI::Input::KeyboardAndMouse::SendInput(&[pinput], cbsize) };
 }
 
-pub async fn request_translate(text: &str) -> anyhow::Result<String> {
+pub async fn request_translate(cache: &mut lru::LruCache<String, String>, text: &str) -> anyhow::Result<String> {
     let client = tauri_plugin_http::reqwest::Client::new();
 
+    if let Some(item) = cache.get(text) {
+        log::info!("cache hit");
+        return Ok(item.into());
+    }
+
+    // grok-2
     let prompt = serde_json::json!({
         "model": "grok-2-latest",
         "messages": [
             {
                 "role": "system",
-                "content": "あなたは英語への翻訳を行うアシスタントです。ユーザが入力した文章を、正しい英語へと翻訳してください。出力は翻訳された文章です。"
+                "content": "You are a professional translation engine. Please translate the text into English without explanation."
+            },
+            {
+                "role": "assistant",
+                "content": "Yes, I understand. Please give me the sentence."
             },
             {
                 "role": "user",
@@ -167,12 +178,17 @@ pub async fn request_translate(text: &str) -> anyhow::Result<String> {
         .send()
         .await?;
 
+    // // gtp-4o-mini
     // let prompt = serde_json::json!({
     //     "model": "gpt-4o-mini",
     //     "messages": [
     //         {
     //             "role": "system",
-    //             "content": "あなたは英語への翻訳を行うアシスタントです。ユーザが入力した文章を、正しい英語へと翻訳してください。出力は翻訳された文章です。"
+    //             "content": "You are a professional translation engine. Please translate the text into English without explanation.   "
+    //         },
+    //         {
+    //             "role": "assistant",
+    //             "content": "Yes, I understand. Please give me the sentence. I reply only the translated sentence, otherwise reply empty string."
     //         },
     //         {
     //             "role": "user",
@@ -190,11 +206,14 @@ pub async fn request_translate(text: &str) -> anyhow::Result<String> {
 
     let data = response.json::<serde_json::Value>().await?;
     let path = jsonpath_rust::JsonPath::try_from("$.choices[*].message.content")?;
-    let item = path
+    let item: String = path
         .find(&data)
         .as_array()
         .and_then(|arr| arr.iter().flat_map(|item| item.as_str()).next())
         .unwrap_or("")
         .into();
+
+    cache.put(text.into(), item.clone());
+
     Ok(item)
 }

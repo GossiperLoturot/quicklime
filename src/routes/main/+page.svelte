@@ -3,6 +3,7 @@
   import * as core from "@tauri-apps/api/core";
   import * as event from "@tauri-apps/api/event";
 
+  let inputRef: HTMLInputElement | null = null;
   let inputText = $state("");
   let outputText = $state("");
 
@@ -10,6 +11,8 @@
     event.preventDefault();
     // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
     await core.invoke("on_confirm_input", { text: outputText });
+    inputText = "";
+    outputText = "";
   }
 
   async function onChangeInput(event: Event) {
@@ -23,12 +26,10 @@
   }
 
   function onShowWindow(event: event.Event<void>) {
-    location.reload();
+    if (inputRef) inputRef.focus();
   }
 
   function onHideWindow(event: event.Event<void>) {
-    inputText = "";
-    outputText = "";
   }
 
   function onUpdateOutput(event: event.Event<string>) {
@@ -52,19 +53,35 @@
 </script>
 
 <main class="container">
-  <form class="row" onsubmit={onConfirmInput}>
+  <div class="output">
+    <div class="output-text">
+      {outputText}
+    </div>
+  </div>
+  <hr />
+  <form class="input" onsubmit={onConfirmInput}>
     <input
-      id="input"
-      placeholder="Enter any text..."
+      class="input-input"
+      placeholder="Input any sentence..."
       autocapitalize="none"
       autocomplete="off"
-      autofocus
+      bind:this={inputRef}
       bind:value={inputText}
       oninput={onChangeInput}
     />
-    <button type="submit">Confirm</button>
   </form>
-  <p>{outputText}</p>
+  <hr />
+  <div class="mode">
+    <div class="mode-tag">
+      completion
+    </div>
+    <div class="mode-tag mode-tag-focus">
+      translation
+    </div>
+    <div class="mode-tag">
+      polishing
+    </div>
+  </div>
 </main>
 
 <style>
@@ -76,6 +93,7 @@
 
   color: #0f0f0f;
   background-color: #f6f6f6;
+  background: transparent;
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -86,85 +104,106 @@
 
 .container {
   margin: 0;
-  padding-top: 10vh;
+  padding: 0;
   display: flex;
   flex-direction: column;
   justify-content: center;
   text-align: center;
+
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: linear-gradient(#f6f6f6, #f6f6f6) padding-box,
+              linear-gradient(to right, orchid, cyan) border-box;
 }
 
-.row {
+.output, .input {
+  display: flex;
+}
+
+.output-text, .input-input {
+  border-radius: 8px;
+  border: 1px solid transparent;
+  padding: 8px 16px;
+  font-size: 16px;
+  color: #0f0f0f;
+  background-color: #f6f6f6;
+  outline: none;
+
+  width: 100%;
+  word-break: break-all;
+}
+
+.output-text {
+  height: 48px;
+}
+
+input::placeholder {
+  color: #0f0f0f50;
+}
+
+.mode {
+  padding: 8px 16px;
   display: flex;
   justify-content: center;
 }
 
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
-}
-
-a:hover {
-  color: #535bf2;
-}
-
-h1 {
-  text-align: center;
-}
-
-input,
-button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  color: #0f0f0f;
-  background-color: #ffffff;
-  transition: border-color 0.25s;
-  box-shadow: 0 2px 2px rgba(0, 0, 0, 0.2);
-}
-
-button {
+.mode-tag {
+  padding: 4px 8px;
+  margin: 0 4px;
   cursor: pointer;
+  user-select: none;
+  
+  color: #0f0f0f50;
+  background-color: #f6f6f6;
 }
 
-button:hover {
-  border-color: #396cd8;
-}
-button:active {
-  border-color: #396cd8;
-  background-color: #e8e8e8;
+.mode-tag-focus {
+  border-radius: 8px;
+
+  color: #f6f6f6;
+  background-color: #0f0f0f;
 }
 
-input,
-button {
-  outline: none;
-}
-
-#input {
-  margin-right: 5px;
+hr {
+  width: calc(100% - 16px);
+  border: none;
+  border-top: 1px solid #0f0f0f50;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
     color: #f6f6f6;
     background-color: #2f2f2f;
+    background: transparent;
   }
 
-  a:hover {
-    color: #24c8db;
+  .container {
+    background: linear-gradient(#0f0f0f, #0f0f0f) padding-box,
+                linear-gradient(to right, darkviolet, darkcyan) border-box;
   }
 
-  input,
-  button {
-    color: #ffffff;
-    background-color: #0f0f0f98;
+  .output-text,
+  .input-input {
+    color: #f6f6f6;
+    background-color: #0f0f0f;
   }
-  button:active {
-    background-color: #0f0f0f69;
+
+  input::placeholder {
+    color: #f6f6f650;
+  }
+
+  .mode-tag {
+    color: #f6f6f650;
+    background-color: #0f0f0f;
+  }
+
+  .mode-tag-focus {
+    color: #0f0f0f;
+    background-color: #f6f6f6;
+  }
+
+  hr {
+    border-top: 1px solid #f6f6f650;
   }
 }
-
 </style>

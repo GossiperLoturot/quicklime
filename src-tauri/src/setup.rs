@@ -4,6 +4,7 @@ use anyhow::Context;
 pub struct AppState {
     pub tx_input: crossbeam_channel::Sender<String>,
     pub _th_input: tauri::async_runtime::JoinHandle<()>,
+    pub cache: tauri::async_runtime::Mutex<lru::LruCache<String, String>>,
 }
 
 pub fn setup_plugin_clipboard() -> anyhow::Result<tauri::plugin::TauriPlugin<tauri::Wry>> {
@@ -84,7 +85,10 @@ pub fn setup_channel(app: &tauri::AppHandle) -> anyhow::Result<()> {
             log::info!("input: {}", input);
             let instant = std::time::Instant::now();
 
-            let output = match utils::request_translate(input.as_str()).await {
+            let state = tauri::Manager::state::<AppState>(&app_clone);
+            let mut cache = state.cache.lock().await;
+
+            let output = match utils::request_translate(&mut cache, input.as_str()).await {
                 Ok(output) => output,
                 Err(e) => {
                     log::error!("error occured {}", e);
@@ -104,9 +108,11 @@ pub fn setup_channel(app: &tauri::AppHandle) -> anyhow::Result<()> {
         }
     });
 
+    let cache = tauri::async_runtime::Mutex::new(lru::LruCache::new(1024.try_into()?));
     let state = AppState {
         tx_input,
         _th_input,
+        cache,
     };
     tauri::Manager::manage(app, state);
 
