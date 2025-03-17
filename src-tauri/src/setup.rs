@@ -1,10 +1,16 @@
 use crate::*;
 use anyhow::Context;
 
+pub const TRANSLATION_MODE: usize = 0;
+pub const POLISHING_MODE: usize = 1;
+pub const COMPLETION_MODE: usize = 2;
+pub type Query = (String, usize);
+
 pub struct AppState {
+    pub mode: std::sync::atomic::AtomicUsize,
     pub tx_input: crossbeam_channel::Sender<String>,
     pub _th_input: tauri::async_runtime::JoinHandle<()>,
-    pub cache: tauri::async_runtime::Mutex<lru::LruCache<String, String>>,
+    pub cache: tauri::async_runtime::Mutex<lru::LruCache<Query, String>>,
 }
 
 pub fn setup_plugin_clipboard() -> anyhow::Result<tauri::plugin::TauriPlugin<tauri::Wry>> {
@@ -88,7 +94,9 @@ pub fn setup_channel(app: &tauri::AppHandle) -> anyhow::Result<()> {
             let state = tauri::Manager::state::<AppState>(&app_clone);
             let mut cache = state.cache.lock().await;
 
-            let output = match utils::request_translate(&mut cache, input.as_str()).await {
+            let input = input.trim();
+            let mode = state.mode.load(std::sync::atomic::Ordering::Relaxed);
+            let output = match utils::request_processing(&mut cache, input, mode).await {
                 Ok(output) => output,
                 Err(e) => {
                     log::error!("error occured {}", e);
@@ -108,8 +116,10 @@ pub fn setup_channel(app: &tauri::AppHandle) -> anyhow::Result<()> {
         }
     });
 
+    let mode = std::sync::atomic::AtomicUsize::new(TRANSLATION_MODE);
     let cache = tauri::async_runtime::Mutex::new(lru::LruCache::new(1024.try_into()?));
     let state = AppState {
+        mode,
         tx_input,
         _th_input,
         cache,

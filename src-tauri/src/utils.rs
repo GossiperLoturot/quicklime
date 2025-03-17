@@ -1,3 +1,5 @@
+use crate::*;
+
 use anyhow::Context;
 
 pub fn create_window_main(app: &tauri::AppHandle) -> anyhow::Result<()> {
@@ -144,32 +146,70 @@ fn send_input(
     unsafe { windows::Win32::UI::Input::KeyboardAndMouse::SendInput(&[pinput], cbsize) };
 }
 
-pub async fn request_translate(cache: &mut lru::LruCache<String, String>, text: &str) -> anyhow::Result<String> {
-    let client = tauri_plugin_http::reqwest::Client::new();
-
-    if let Some(item) = cache.get(text) {
-        log::info!("cache hit");
-        return Ok(item.into());
+pub async fn request_processing(cache: &mut lru::LruCache<setup::Query, String>, input: &str, mode: usize) -> anyhow::Result<String> {
+    let query: setup::Query = (input.into(), mode);
+    if let Some(output) = cache.get(&query) {
+        log::info!("[cache hit] text: {}, mode: {}", input, mode);
+        return Ok(output.into());
     }
+    log::info!("[cache miss] text: {}, mode: {}", input, mode);
 
     // grok-2
-    let prompt = serde_json::json!({
-        "model": "grok-2-latest",
-        "messages": [
-            {
-                "role": "system",
-                "content": "You are a professional translation engine. Please translate the text into English without explanation."
-            },
-            {
-                "role": "assistant",
-                "content": "Yes, I understand. Please give me the sentence."
-            },
-            {
-                "role": "user",
-                "content": text
-            }
-        ]
-    });
+    let prompt = match mode {
+        setup::TRANSLATION_MODE => serde_json::json!({
+            "model": "grok-2-latest",
+            "messages": [
+                {
+                    "role": "system",
+                    "content": "You are a professional translation engine. Please translate the text into English without explanation."
+                },
+                {
+                    "role": "assistant",
+                    "content": "Yes, I understand. Please give me the sentence."
+                },
+                {
+                    "role": "user",
+                    "content": input
+                }
+            ]
+        }),
+        setup::POLISHING_MODE => serde_json::json!({
+            "model": "grok-2-latest",
+            "messages": [
+                {
+                    "role": "system",
+                    "content": "You are a professional polishing engine. Please polish the text."
+                },
+                {
+                    "role": "assistant",
+                    "content": "Yes, I understand. Please give me the sentence."
+                },
+                {
+                    "role": "user",
+                    "content": input
+                }
+            ]
+        }),
+        setup::COMPLETION_MODE => serde_json::json!({
+            "model": "grok-2-latest",
+            "messages": [
+                {
+                    "role": "system",
+                    "content": "You are a professional completion engine. Please complete the text."
+                },
+                {
+                    "role": "assistant",
+                    "content": "Yes, I understand. Please give me the sentence."
+                },
+                {
+                    "role": "user",
+                    "content": input
+                }
+            ]
+        }),
+        _ => return Err(anyhow::anyhow!("failed to create prompt"))
+    };
+    let client = tauri_plugin_http::reqwest::Client::new();
     let response = client
         .post("https://api.x.ai/v1/chat/completions")
         .bearer_auth(env!("XAI_TOKEN"))
@@ -178,42 +218,16 @@ pub async fn request_translate(cache: &mut lru::LruCache<String, String>, text: 
         .send()
         .await?;
 
-    // // gtp-4o-mini
-    // let prompt = serde_json::json!({
-    //     "model": "gpt-4o-mini",
-    //     "messages": [
-    //         {
-    //             "role": "system",
-    //             "content": "You are a professional translation engine. Please translate the text into English without explanation.   "
-    //         },
-    //         {
-    //             "role": "assistant",
-    //             "content": "Yes, I understand. Please give me the sentence. I reply only the translated sentence, otherwise reply empty string."
-    //         },
-    //         {
-    //             "role": "user",
-    //             "content": text
-    //         }
-    //     ]
-    // });
-    // let response = client
-    //     .post("https://api.openai.com/v1/chat/completions")
-    //     .bearer_auth(env!("OPENAI_TOKEN"))
-    //     .header("Content-Type", "application/json")
-    //     .json(&prompt)
-    //     .send()
-    //     .await?;
-
     let data = response.json::<serde_json::Value>().await?;
-    let path = jsonpath_rust::JsonPath::try_from("$.choices[*].message.content")?;
-    let item: String = path
+    let extractor = jsonpath_rust::JsonPath::try_from("$.choices[*].message.content")?;
+    let output: String = extractor
         .find(&data)
         .as_array()
         .and_then(|arr| arr.iter().flat_map(|item| item.as_str()).next())
         .unwrap_or("")
         .into();
 
-    cache.put(text.into(), item.clone());
+    cache.put(query, output.clone());
 
-    Ok(item)
+    Ok(output)
 }

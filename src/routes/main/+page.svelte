@@ -3,14 +3,31 @@
   import * as core from "@tauri-apps/api/core";
   import * as event from "@tauri-apps/api/event";
 
+  const MODE_TRANSLATION = 0;
+  const MODE_POLISHING = 1;
+  const MODE_COMPLETION = 2;
+
   let inputRef: HTMLInputElement | null = null;
   let inputText = $state("");
   let outputText = $state("");
+  let mode = $state(0);
+
+  function modeTagClass(index: number) {
+    return index === mode ? "mode-tag mode-tag-focus" : "mode-tag";
+  }
+
+  function modeTagHandle(index: number) {
+    return async function (event: Event) {
+      event.preventDefault();
+      // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
+      await core.invoke("on_change_mode", { mode: index });
+    };
+  }
 
   async function onConfirmInput(event: Event) {
     event.preventDefault();
     // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    await core.invoke("on_confirm_input", { text: outputText });
+    await core.invoke("on_confirm_input", { input: outputText });
     inputText = "";
     outputText = "";
   }
@@ -18,11 +35,14 @@
   async function onChangeInput(event: Event) {
     event.preventDefault();
     // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    await core.invoke("on_change_input", { text: inputText });
+    await core.invoke("on_change_input", { input: inputText });
   }
 
   function onKeyDown(event: KeyboardEvent) {
     if (event.key === "Escape") core.invoke("on_exit_input", {});
+    else if (event.ctrlKey && event.key === "1") core.invoke("on_change_mode", { mode: MODE_TRANSLATION });
+    else if (event.ctrlKey && event.key === "2") core.invoke("on_change_mode", { mode: MODE_POLISHING });
+    else if (event.ctrlKey && event.key === "3") core.invoke("on_change_mode", { mode: MODE_COMPLETION });
   }
 
   function onShowWindow(event: event.Event<void>) {
@@ -36,18 +56,25 @@
     outputText = event.payload;
   }
 
+  function onUpdateMode(event: event.Event<number>) {
+    mode = event.payload;
+    core.invoke("on_change_input", { input: inputText });
+  }
+
   onMount(() => {
     document.addEventListener("keydown", onKeyDown);
 
     const unlisten0 = event.listen<void>("show_window", onShowWindow);
     const unlisten1 = event.listen<void>("hide_window", onHideWindow);
     const unlisten2 = event.listen<string>("update_output", onUpdateOutput);
+    const unlisten3 = event.listen<number>("update_mode", onUpdateMode);
 
     return async () => {
       document.removeEventListener("keydown", onKeyDown);
       (await unlisten0)();
       (await unlisten1)();
       (await unlisten2)();
+      (await unlisten3)();
     };
   });
 </script>
@@ -72,25 +99,27 @@
   </form>
   <hr />
   <div class="mode">
-    <div class="mode-tag">
-      completion
-    </div>
-    <div class="mode-tag mode-tag-focus">
+    <button class={modeTagClass(MODE_TRANSLATION)} onclick={modeTagHandle(MODE_TRANSLATION)}>
       translation
-    </div>
-    <div class="mode-tag">
+    </button>
+    <button class={modeTagClass(MODE_POLISHING)} onclick={modeTagHandle(MODE_POLISHING)}>
       polishing
-    </div>
+    </button>
+    <button class={modeTagClass(MODE_COMPLETION)} onclick={modeTagHandle(MODE_COMPLETION)}>
+      completion
+    </button>
   </div>
 </main>
 
 <style>
-:root {
+* {
   font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
   font-size: 16px;
   line-height: 24px;
   font-weight: 400;
+}
 
+:root {
   color: #0f0f0f;
   background-color: #f6f6f6;
   background: transparent;
@@ -124,7 +153,6 @@
   border-radius: 8px;
   border: 1px solid transparent;
   padding: 8px 16px;
-  font-size: 16px;
   color: #0f0f0f;
   background-color: #f6f6f6;
   outline: none;
@@ -150,18 +178,21 @@ input::placeholder {
 .mode-tag {
   padding: 4px 8px;
   margin: 0 4px;
-  cursor: pointer;
-  user-select: none;
+  outline: none;
+  border-radius: 8px;
+  border: 1px solid transparent;
   
   color: #0f0f0f50;
   background-color: #f6f6f6;
 }
 
 .mode-tag-focus {
-  border-radius: 8px;
-
   color: #f6f6f6;
   background-color: #0f0f0f;
+}
+
+.mode-tag:hover:not(.mode-tag-focus) {
+  background-color: #0f0f0f10;
 }
 
 hr {
@@ -200,6 +231,10 @@ hr {
   .mode-tag-focus {
     color: #0f0f0f;
     background-color: #f6f6f6;
+  }
+
+  .mode-tag:hover:not(.mode-tag-focus) {
+    background-color: #f6f6f610;
   }
 
   hr {
