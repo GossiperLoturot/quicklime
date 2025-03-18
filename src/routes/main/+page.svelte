@@ -10,19 +10,7 @@
   let inputRef: HTMLInputElement | null = null;
   let inputText = $state("");
   let outputText = $state("");
-  let mode = $state(0);
-
-  function modeTagClass(index: number) {
-    return index === mode ? "mode-tag mode-tag-focus" : "mode-tag";
-  }
-
-  function modeTagHandle(index: number) {
-    return async function (event: Event) {
-      event.preventDefault();
-      // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-      await core.invoke("on_change_mode", { mode: index });
-    };
-  }
+  let modeIndex = $state(MODE_TRANSLATION);
 
   async function onConfirmInput(event: Event) {
     event.preventDefault();
@@ -35,18 +23,48 @@
   async function onChangeInput(event: Event) {
     event.preventDefault();
     // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    await core.invoke("on_change_input", { input: inputText });
+    await core.invoke("on_change_input", { input: inputText, mode: modeIndex });
+  }
+
+  function modeTagClass(index: number) {
+    return index === modeIndex ? "mode-tag mode-tag-focus" : "mode-tag";
+  }
+
+  function modeTagHandle(index: number) {
+    return async function (event: Event) {
+      event.preventDefault();
+      // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
+      modeIndex = index;
+      await core.invoke("on_change_input", { input: inputText, mode: modeIndex });
+    };
   }
 
   function onKeyDown(event: KeyboardEvent) {
-    if (event.key === "Escape") core.invoke("on_exit_input", {});
-    else if (event.ctrlKey && event.key === "1") core.invoke("on_change_mode", { mode: MODE_TRANSLATION });
-    else if (event.ctrlKey && event.key === "2") core.invoke("on_change_mode", { mode: MODE_POLISHING });
-    else if (event.ctrlKey && event.key === "3") core.invoke("on_change_mode", { mode: MODE_COMPLETION });
+    // Exit input mode
+    if (event.key === "Escape") {
+      core.invoke("on_exit_input", {});
+
+    // Switch to translation mode
+    } else if (event.ctrlKey && event.key === "1") {
+      modeIndex = MODE_TRANSLATION;
+      core.invoke("on_change_input", { input: inputText, mode: modeIndex });
+
+    // Switch to polishing mode
+    } else if (event.ctrlKey && event.key === "2") {
+      modeIndex = MODE_POLISHING
+      core.invoke("on_change_input", { input: inputText, mode: modeIndex });
+
+    // Switch to completion mode
+    } else if (event.ctrlKey && event.key === "3") {
+      modeIndex = MODE_COMPLETION;
+      core.invoke("on_change_input", { input: inputText, mode: modeIndex });
+    }
   }
 
   function onShowWindow(event: event.Event<void>) {
-    if (inputRef) inputRef.focus();
+    if (inputRef) {
+      inputRef.focus();
+    }
   }
 
   function onHideWindow(event: event.Event<void>) {
@@ -56,25 +74,18 @@
     outputText = event.payload;
   }
 
-  function onUpdateMode(event: event.Event<number>) {
-    mode = event.payload;
-    core.invoke("on_change_input", { input: inputText });
-  }
-
   onMount(() => {
     document.addEventListener("keydown", onKeyDown);
 
     const unlisten0 = event.listen<void>("show_window", onShowWindow);
     const unlisten1 = event.listen<void>("hide_window", onHideWindow);
     const unlisten2 = event.listen<string>("update_output", onUpdateOutput);
-    const unlisten3 = event.listen<number>("update_mode", onUpdateMode);
 
     return async () => {
       document.removeEventListener("keydown", onKeyDown);
       (await unlisten0)();
       (await unlisten1)();
       (await unlisten2)();
-      (await unlisten3)();
     };
   });
 </script>
@@ -121,7 +132,7 @@
 
 :root {
   color: #0f0f0f;
-  background-color: #f6f6f6;
+  background-color: #ffffff;
   background: transparent;
 
   font-synthesis: none;
@@ -139,22 +150,22 @@
   justify-content: center;
   text-align: center;
 
-  border: 1px solid transparent;
   border-radius: 8px;
-  background: linear-gradient(#f6f6f6, #f6f6f6) padding-box,
-              linear-gradient(to right, orchid, cyan) border-box;
+  border: 1px solid #396cd8;
+  background-color: #ffffff;
 }
 
 .output, .input {
   display: flex;
 }
 
-.output-text, .input-input {
+.output-text,
+.input-input {
   border-radius: 8px;
   border: 1px solid transparent;
   padding: 8px 16px;
   color: #0f0f0f;
-  background-color: #f6f6f6;
+  background-color: #ffffff;
   outline: none;
 
   width: 100%;
@@ -166,7 +177,7 @@
 }
 
 input::placeholder {
-  color: #0f0f0f50;
+  color: #0f0f0f80;
 }
 
 .mode {
@@ -179,20 +190,17 @@ input::placeholder {
   padding: 4px 8px;
   margin: 0 4px;
   outline: none;
+  cursor: pointer;
   border-radius: 8px;
   border: 1px solid transparent;
   
-  color: #0f0f0f50;
-  background-color: #f6f6f6;
+  color: #0f0f0f80;
+  background-color: #ffffff;
 }
 
 .mode-tag-focus {
-  color: #f6f6f6;
-  background-color: #0f0f0f;
-}
-
-.mode-tag:hover:not(.mode-tag-focus) {
-  background-color: #0f0f0f10;
+  color: #0f0f0f;
+  background-color: #f0f0f0;
 }
 
 hr {
@@ -203,42 +211,37 @@ hr {
 
 @media (prefers-color-scheme: dark) {
   :root {
-    color: #f6f6f6;
-    background-color: #2f2f2f;
+    color: #f0f0f0;
+    background-color: #0f0f0f;
     background: transparent;
   }
 
   .container {
-    background: linear-gradient(#0f0f0f, #0f0f0f) padding-box,
-                linear-gradient(to right, darkviolet, darkcyan) border-box;
+    background-color: #0f0f0f;
   }
 
   .output-text,
   .input-input {
-    color: #f6f6f6;
+    color: #f0f0f0;
     background-color: #0f0f0f;
   }
 
   input::placeholder {
-    color: #f6f6f650;
+    color: #f0f0f080;
   }
 
   .mode-tag {
-    color: #f6f6f650;
+    color: #f0f0f080;
     background-color: #0f0f0f;
   }
 
   .mode-tag-focus {
-    color: #0f0f0f;
-    background-color: #f6f6f6;
-  }
-
-  .mode-tag:hover:not(.mode-tag-focus) {
-    background-color: #f6f6f610;
+    color: #f0f0f0;
+    background-color: #1f1f1f;
   }
 
   hr {
-    border-top: 1px solid #f6f6f650;
+    border-top: 1px solid #f0f0f050;
   }
 }
 </style>

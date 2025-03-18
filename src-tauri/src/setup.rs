@@ -1,25 +1,36 @@
 use crate::*;
 use anyhow::Context;
 
-pub const TRANSLATION_MODE: usize = 0;
-pub const POLISHING_MODE: usize = 1;
-pub const COMPLETION_MODE: usize = 2;
+pub const MODE_TRANSLATION: usize = 0;
+pub const MODE_POLISHING: usize = 1;
+pub const MODE_COMPLETION: usize = 2;
+
 pub type Query = (String, usize);
+
+pub const LLM_CHATGPT: usize = 0;
+pub const LLM_GROK: usize = 1;
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct Config {
+    pub llm: usize,
+    pub token: String,
+}
 
 pub struct AppState {
     pub mode: std::sync::atomic::AtomicUsize,
     pub tx_input: crossbeam_channel::Sender<String>,
     pub _th_input: tauri::async_runtime::JoinHandle<()>,
     pub cache: tauri::async_runtime::Mutex<lru::LruCache<Query, String>>,
+    pub config: tauri::async_runtime::Mutex<Config>,
 }
 
-pub fn setup_plugin_clipboard() -> anyhow::Result<tauri::plugin::TauriPlugin<tauri::Wry>> {
+pub fn setup_plugin_clipboard() -> anyhow::Result<impl tauri::plugin::Plugin<tauri::Wry>> {
     log::info!("setup plugin clipboard");
 
     Ok(tauri_plugin_clipboard_manager::init())
 }
 
-pub fn setup_plugin_global_shortcut() -> anyhow::Result<tauri::plugin::TauriPlugin<tauri::Wry>> {
+pub fn setup_plugin_global_shortcut() -> anyhow::Result<impl tauri::plugin::Plugin<tauri::Wry>> {
     log::info!("setup plugin global_shortcut");
 
     let key = tauri_plugin_global_shortcut::Shortcut::new(
@@ -93,10 +104,11 @@ pub fn setup_channel(app: &tauri::AppHandle) -> anyhow::Result<()> {
 
             let state = tauri::Manager::state::<AppState>(&app_clone);
             let mut cache = state.cache.lock().await;
+            let config = state.config.lock().await;
 
             let input = input.trim();
             let mode = state.mode.load(std::sync::atomic::Ordering::Relaxed);
-            let output = match utils::request_processing(&mut cache, input, mode).await {
+            let output = match utils::request_processing(&mut cache, input, mode, &config).await {
                 Ok(output) => output,
                 Err(e) => {
                     log::error!("error occured {}", e);
@@ -116,13 +128,21 @@ pub fn setup_channel(app: &tauri::AppHandle) -> anyhow::Result<()> {
         }
     });
 
-    let mode = std::sync::atomic::AtomicUsize::new(TRANSLATION_MODE);
+    let filepath = tauri::Manager::path(app).resolve("config.json", tauri::path::BaseDirectory::AppConfig)?;
+    let config = std::fs::File::open(filepath)
+        .ok()
+        .and_then(|rdr| serde_json::from_reader::<_, Config>(rdr).ok())
+        .unwrap_or(Config { llm: LLM_CHATGPT, token: Default::default() });
+
+    let mode = std::sync::atomic::AtomicUsize::new(MODE_TRANSLATION);
     let cache = tauri::async_runtime::Mutex::new(lru::LruCache::new(1024.try_into()?));
+    let config = tauri::async_runtime::Mutex::new(config);
     let state = AppState {
         mode,
         tx_input,
         _th_input,
         cache,
+        config,
     };
     tauri::Manager::manage(app, state);
 
@@ -136,11 +156,10 @@ pub fn setup_tray(app: &tauri::AppHandle) -> anyhow::Result<()> {
         .clone();
 
     let menu_show = tauri::menu::MenuItem::with_id(app, "show", "Show", true, None::<&str>)?;
-    let menu_hide = tauri::menu::MenuItem::with_id(app, "hide", "Hide", true, None::<&str>)?;
     let menu_config = tauri::menu::MenuItem::with_id(app, "config", "Config", true, None::<&str>)?;
     let menu_quit = tauri::menu::MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
     let menu =
-        tauri::menu::Menu::with_items(app, &[&menu_show, &menu_hide, &menu_config, &menu_quit])?;
+        tauri::menu::Menu::with_items(app, &[&menu_show, &menu_config, &menu_quit])?;
 
     // no occur panic in handle fn
     let handle = |app: &tauri::AppHandle, event: tauri::menu::MenuEvent| {
@@ -148,15 +167,6 @@ pub fn setup_tray(app: &tauri::AppHandle) -> anyhow::Result<()> {
             "show" => {
                 log::info!("send event: show window main");
                 match utils::show_window_main(app) {
-                    Ok(_) => {}
-                    Err(e) => {
-                        log::error!("error occured {}", e);
-                    }
-                };
-            }
-            "hide" => {
-                log::info!("send event: hide window main");
-                match utils::hide_window_main(app) {
                     Ok(_) => {}
                     Err(e) => {
                         log::error!("error occured {}", e);

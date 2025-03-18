@@ -1,28 +1,64 @@
+<script lang="ts">
+  import { onMount } from "svelte";
+  import * as core from "@tauri-apps/api/core";
+  import * as event from "@tauri-apps/api/event";
+
+  const LLM_CHATGPT = 0;
+  const LLM_GROK = 1;
+
+  interface Config {
+    llm: number;
+    token: string;
+  }
+
+  // default config for view
+  let config = $state<Config>({
+    llm: LLM_CHATGPT,
+    token: "",
+  });
+
+  async function onChangeConfig(event: Event) {
+    event.preventDefault();
+    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
+    await core.invoke("on_change_config", { config });
+  }
+
+  onMount(() => {
+    core.invoke<Config>("get_config", {})
+      .then((new_config) => config = new_config);
+  });
+</script>
+
 <main class="container">
   <h1>Configuration</h1>
 
-  <div class="line">
-    <div>
-      <p>API Provider</p>
-      <div>Grok</div>
-    </div>
+  <hr />
 
-    <div>
-      <p>API Token</p>
-    </div>
+  <div>
+    <label for="item-provider">LLM Provider</label>
+    <select class="item-provider" bind:value={config.llm} onchange={onChangeConfig}>
+      <option value={LLM_CHATGPT}>Chat GPT</option>
+      <option value={LLM_GROK}>Grok</option>
+    </select>
+  </div>
+
+  <div>
+    <label for="item-token">API Token</label>
+    <input type="text" class="item-token" bind:value={config.token} onchange={onChangeConfig} />
   </div>
 </main>
 
 <style>
-
-:root {
+* {
   font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
   font-size: 16px;
   line-height: 24px;
   font-weight: 400;
+}
 
+:root {
   color: #0f0f0f;
-  background-color: #f6f6f6;
+  background-color: #ffffff;
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -31,80 +67,72 @@
   -webkit-text-size-adjust: 100%;
 }
 
+h1 {
+  font-size: 32px;
+}
+
+label {
+  display: block;
+  padding: 8px 0;
+  color: #0f0f0f80;
+}
+
 .container {
   margin: 0;
-  padding-top: 10vh;
   display: flex;
+  padding: 16px;
   flex-direction: column;
   justify-content: center;
-  text-align: center;
 }
 
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
-}
-
-a:hover {
-  color: #535bf2;
-}
-
-h1 {
-  text-align: center;
-}
-
-button {
-  border-radius: 8px;
+.item-provider {
   border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
+  padding: 8px 12px;
   color: #0f0f0f;
-  background-color: #ffffff;
-  transition: border-color 0.25s;
-  box-shadow: 0 2px 2px rgba(0, 0, 0, 0.2);
-}
-
-button {
+  background-color: #f0f0f0;
   cursor: pointer;
-}
-
-button:hover {
-  border-color: #396cd8;
-}
-button:active {
-  border-color: #396cd8;
-  background-color: #e8e8e8;
-}
-
-button {
   outline: none;
+  margin-bottom: 1em;
 }
 
-.line {
-  display: block;
+.item-token {
+  border: 1px solid transparent;
+  padding: 8px 12px;
+  color: #0f0f0f;
+  background-color: #f0f0f0;
+  outline: none;
+  margin-bottom: 1em;
+}
+
+.item-provider:hover,
+.item-token:hover {
+  border-color: #396cd8;
+}
+
+hr {
+  width: calc(100% - 16px);
+  border: none;
+  border-top: 1px solid #0f0f0f50;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    color: #f6f6f6;
-    background-color: #2f2f2f;
+    color: #f0f0f0;
+    background-color: #0f0f0f;
   }
 
-  a:hover {
-    color: #24c8db;
+  label {
+    color: #f0f0f080;
   }
 
-  input,
-  button {
-    color: #ffffff;
-    background-color: #0f0f0f98;
+  .item-provider,
+  .item-token {
+    color: #f0f0f0;
+    background-color: #1f1f1f;
   }
-  button:active {
-    background-color: #0f0f0f69;
+
+  hr {
+    border-top: 1px solid #f0f0f050;
   }
 }
-
 </style>

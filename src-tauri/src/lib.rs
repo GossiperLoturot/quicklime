@@ -20,7 +20,8 @@ pub fn run() -> anyhow::Result<()> {
             command::on_confirm_input,
             command::on_exit_input,
             command::on_change_input,
-            command::on_change_mode,
+            command::on_change_config,
+            command::get_config,
         ])
         .on_window_event(setup::setup_window_event()?)
         .run(tauri::generate_context!())?;

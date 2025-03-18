@@ -29,6 +29,7 @@ pub fn create_window_config(app: &tauri::AppHandle) -> anyhow::Result<()> {
     let url = tauri::WebviewUrl::App("config".into());
     tauri::WebviewWindowBuilder::new(app, "config", url)
         .title("Quicklime")
+        .min_inner_size(480.0, 270.0)
         .build()?;
 
     Ok(())
@@ -64,17 +65,22 @@ pub fn hide_window_main(app: &tauri::AppHandle) -> anyhow::Result<()> {
 pub fn get_window_center(app: &tauri::AppHandle) -> anyhow::Result<tauri::Position> {
     log::info!("get forground window center position");
 
-    let window =
-        tauri::Manager::get_webview_window(app, "main").context("window main is not found")?;
-
-    let mut lprect = windows::Win32::Foundation::RECT::default();
-
-    let slf_hwnd = window.hwnd()?;
     let hwnd = unsafe { windows::Win32::UI::WindowsAndMessaging::GetForegroundWindow() };
-    if hwnd == slf_hwnd {
-        return Err(anyhow::anyhow!("focus window must be no window main"));
+
+    if let Some(window) = tauri::Manager::get_webview_window(app, "main") {
+        let slf_hwnd = window.hwnd()?;
+        if hwnd == slf_hwnd {
+            return Err(anyhow::anyhow!("focus window must be no window main"));
+        }
+    }
+    if let Some(window) = tauri::Manager::get_webview_window(app, "config") {
+        let slf_hwnd = window.hwnd()?;
+        if hwnd == slf_hwnd {
+            return Err(anyhow::anyhow!("focus window must be no window config"));
+        }
     }
 
+    let mut lprect = windows::Win32::Foundation::RECT::default();
     unsafe { windows::Win32::UI::WindowsAndMessaging::GetWindowRect(hwnd, &mut lprect) }
         .context("failed to get window rect")?;
 
@@ -146,7 +152,12 @@ fn send_input(
     unsafe { windows::Win32::UI::Input::KeyboardAndMouse::SendInput(&[pinput], cbsize) };
 }
 
-pub async fn request_processing(cache: &mut lru::LruCache<setup::Query, String>, input: &str, mode: usize) -> anyhow::Result<String> {
+pub async fn request_processing(
+    cache: &mut lru::LruCache<setup::Query, String>,
+    input: &str,
+    mode: usize,
+    config: &setup::Config,
+) -> anyhow::Result<String> {
     let query: setup::Query = (input.into(), mode);
     if let Some(output) = cache.get(&query) {
         log::info!("[cache hit] text: {}, mode: {}", input, mode);
@@ -154,69 +165,137 @@ pub async fn request_processing(cache: &mut lru::LruCache<setup::Query, String>,
     }
     log::info!("[cache miss] text: {}, mode: {}", input, mode);
 
-    // grok-2
-    let prompt = match mode {
-        setup::TRANSLATION_MODE => serde_json::json!({
-            "model": "grok-2-latest",
-            "messages": [
-                {
-                    "role": "system",
-                    "content": "You are a professional translation engine. Please translate the text into English without explanation."
-                },
-                {
-                    "role": "assistant",
-                    "content": "Yes, I understand. Please give me the sentence."
-                },
-                {
-                    "role": "user",
-                    "content": input
-                }
-            ]
-        }),
-        setup::POLISHING_MODE => serde_json::json!({
-            "model": "grok-2-latest",
-            "messages": [
-                {
-                    "role": "system",
-                    "content": "You are a professional polishing engine. Please polish the text."
-                },
-                {
-                    "role": "assistant",
-                    "content": "Yes, I understand. Please give me the sentence."
-                },
-                {
-                    "role": "user",
-                    "content": input
-                }
-            ]
-        }),
-        setup::COMPLETION_MODE => serde_json::json!({
-            "model": "grok-2-latest",
-            "messages": [
-                {
-                    "role": "system",
-                    "content": "You are a professional completion engine. Please complete the text."
-                },
-                {
-                    "role": "assistant",
-                    "content": "Yes, I understand. Please give me the sentence."
-                },
-                {
-                    "role": "user",
-                    "content": input
-                }
-            ]
-        }),
-        _ => return Err(anyhow::anyhow!("failed to create prompt"))
+    let response = match config.llm {
+        setup::LLM_CHATGPT => {
+            let prompt = match mode {
+                setup::MODE_TRANSLATION => serde_json::json!({
+                    "model": "gpt-4o-mini",
+                    "messages": [
+                        {
+                            "role": "system",
+                            "content": "You are a professional translation engine. Please translate the text into English without explanation."
+                        },
+                        {
+                            "role": "assistant",
+                            "content": "Yes, I understand. Please give me the sentence. I reply only the translated sentence, otherwise reply empty string."
+                        },
+                        {
+                            "role": "user",
+                            "content": input
+                        }
+                    ]
+                }),
+                setup::MODE_POLISHING => serde_json::json!({
+                    "model": "gpt-4o-mini",
+                    "messages": [
+                        {
+                            "role": "system",
+                            "content": "You are a professional polishing engine. Please polish the text."
+                        },
+                        {
+                            "role": "assistant",
+                            "content": "Yes, I understand. Please give me the sentence. I reply only the polished sentence, otherwise reply empty string."
+                        },
+                        {
+                            "role": "user",
+                            "content": input
+                        }
+                    ]
+                }),
+                setup::MODE_COMPLETION => serde_json::json!({
+                    "model": "gpt-4o-mini",
+                    "messages": [
+                        {
+                            "role": "system",
+                            "content": "You are a professional completion engine. Please complete the text."
+                        },
+                        {
+                            "role": "assistant",
+                            "content": "Yes, I understand. Please give me the sentence."
+                        },
+                        {
+                            "role": "user",
+                            "content": input
+                        }
+                    ]
+                }),
+                _ => return Err(anyhow::anyhow!("failed to create prompt")),
+            };
+            let client = tauri_plugin_http::reqwest::Client::new();
+            client
+                .post("https://api.openai.com/v1/chat/completions")
+                .bearer_auth(&config.token)
+                .header("Content-Type", "application/json")
+                .json(&prompt)
+                .send()
+                .await?
+        }
+        setup::LLM_GROK => {
+            let prompt = match mode {
+                setup::MODE_TRANSLATION => serde_json::json!({
+                    "model": "grok-2-latest",
+                    "messages": [
+                        {
+                            "role": "system",
+                            "content": "You are a professional translation engine. Please translate the text into English without explanation."
+                        },
+                        {
+                            "role": "assistant",
+                            "content": "Yes, I understand. Please give me the sentence."
+                        },
+                        {
+                            "role": "user",
+                            "content": input
+                        }
+                    ]
+                }),
+                setup::MODE_POLISHING => serde_json::json!({
+                    "model": "grok-2-latest",
+                    "messages": [
+                        {
+                            "role": "system",
+                            "content": "You are a professional polishing engine. Please polish the text."
+                        },
+                        {
+                            "role": "assistant",
+                            "content": "Yes, I understand. Please give me the sentence."
+                        },
+                        {
+                            "role": "user",
+                            "content": input
+                        }
+                    ]
+                }),
+                setup::MODE_COMPLETION => serde_json::json!({
+                    "model": "grok-2-latest",
+                    "messages": [
+                        {
+                            "role": "system",
+                            "content": "You are a professional completion engine. Please complete the text."
+                        },
+                        {
+                            "role": "assistant",
+                            "content": "Yes, I understand. Please give me the sentence."
+                        },
+                        {
+                            "role": "user",
+                            "content": input
+                        }
+                    ]
+                }),
+                _ => return Err(anyhow::anyhow!("failed to create prompt")),
+            };
+            let client = tauri_plugin_http::reqwest::Client::new();
+            client
+                .post("https://api.x.ai/v1/chat/completions")
+                .bearer_auth(&config.token)
+                .header("Content-Type", "application/json")
+                .json(&prompt)
+                .send()
+                .await?
+        }
+        _ => unreachable!(),
     };
-    let client = tauri_plugin_http::reqwest::Client::new();
-    let response = client
-        .post("https://api.x.ai/v1/chat/completions")
-        .bearer_auth(env!("XAI_TOKEN"))
-        .header("Content-Type", "application/json")
-        .json(&prompt)
-        .send()
-        .await?;
 
     let data = response.json::<serde_json::Value>().await?;
     let extractor = jsonpath_rust::JsonPath::try_from("$.choices[*].message.content")?;
