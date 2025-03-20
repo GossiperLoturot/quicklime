@@ -35,7 +35,10 @@
       event.preventDefault();
       // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
       modeIndex = index;
-      await core.invoke("on_change_input", { input: inputText, mode: modeIndex });
+      await core.invoke("on_change_input", {
+        input: inputText,
+        mode: modeIndex,
+      });
     };
   }
 
@@ -44,17 +47,17 @@
     if (event.key === "Escape") {
       core.invoke("on_exit_input", {});
 
-    // Switch to translation mode
+      // Switch to translation mode
     } else if (event.ctrlKey && event.key === "1") {
       modeIndex = MODE_TRANSLATION;
       core.invoke("on_change_input", { input: inputText, mode: modeIndex });
 
-    // Switch to polishing mode
+      // Switch to polishing mode
     } else if (event.ctrlKey && event.key === "2") {
-      modeIndex = MODE_POLISHING
+      modeIndex = MODE_POLISHING;
       core.invoke("on_change_input", { input: inputText, mode: modeIndex });
 
-    // Switch to completion mode
+      // Switch to completion mode
     } else if (event.ctrlKey && event.key === "3") {
       modeIndex = MODE_COMPLETION;
       core.invoke("on_change_input", { input: inputText, mode: modeIndex });
@@ -67,8 +70,7 @@
     }
   }
 
-  function onHideWindow(event: event.Event<void>) {
-  }
+  function onHideWindow(event: event.Event<void>) {}
 
   function onUpdateOutput(event: event.Event<string>) {
     outputText = event.payload;
@@ -110,138 +112,148 @@
   </form>
   <hr />
   <div class="mode">
-    <button class={modeTagClass(MODE_TRANSLATION)} onclick={modeTagHandle(MODE_TRANSLATION)}>
+    <button
+      class={modeTagClass(MODE_TRANSLATION)}
+      onclick={modeTagHandle(MODE_TRANSLATION)}
+    >
       translation
     </button>
-    <button class={modeTagClass(MODE_POLISHING)} onclick={modeTagHandle(MODE_POLISHING)}>
+    <button
+      class={modeTagClass(MODE_POLISHING)}
+      onclick={modeTagHandle(MODE_POLISHING)}
+    >
       polishing
     </button>
-    <button class={modeTagClass(MODE_COMPLETION)} onclick={modeTagHandle(MODE_COMPLETION)}>
+    <button
+      class={modeTagClass(MODE_COMPLETION)}
+      onclick={modeTagHandle(MODE_COMPLETION)}
+    >
       completion
     </button>
   </div>
 </main>
 
 <style>
-* {
-  font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
-  font-size: 16px;
-  line-height: 24px;
-  font-weight: 400;
-}
+  * {
+    font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
+    font-size: 16px;
+    line-height: 24px;
+    font-weight: 400;
+  }
 
-:root {
-  color: #0f0f0f;
-  background-color: #ffffff;
-  background: transparent;
-
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  -webkit-text-size-adjust: 100%;
-}
-
-.container {
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  text-align: center;
-
-  border-radius: 8px;
-  border: 1px solid #396cd8;
-  background-color: #ffffff;
-}
-
-.output, .input {
-  display: flex;
-}
-
-.output-text,
-.input-input {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 8px 16px;
-  color: #0f0f0f;
-  background-color: #ffffff;
-  outline: none;
-
-  width: 100%;
-  word-break: break-all;
-}
-
-.output-text {
-  height: 48px;
-}
-
-input::placeholder {
-  color: #0f0f0f80;
-}
-
-.mode {
-  padding: 8px 16px;
-  display: flex;
-  justify-content: center;
-}
-
-.mode-tag {
-  padding: 4px 8px;
-  margin: 0 4px;
-  outline: none;
-  cursor: pointer;
-  border-radius: 8px;
-  border: 1px solid transparent;
-  
-  color: #0f0f0f80;
-  background-color: #ffffff;
-}
-
-.mode-tag-focus {
-  color: #0f0f0f;
-  background-color: #f0f0f0;
-}
-
-hr {
-  width: calc(100% - 16px);
-  border: none;
-  border-top: 1px solid #0f0f0f50;
-}
-
-@media (prefers-color-scheme: dark) {
   :root {
-    color: #f0f0f0;
-    background-color: #0f0f0f;
+    color: #0f0f0f;
+    background-color: #ffffff;
     background: transparent;
+
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    -webkit-text-size-adjust: 100%;
   }
 
   .container {
-    background-color: #0f0f0f;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    text-align: center;
+
+    border-radius: 8px;
+    border: 1px solid #396cd8;
+    background-color: #ffffff;
+  }
+
+  .output,
+  .input {
+    display: flex;
   }
 
   .output-text,
   .input-input {
-    color: #f0f0f0;
-    background-color: #0f0f0f;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    padding: 8px 16px;
+    color: #0f0f0f;
+    background-color: #ffffff;
+    outline: none;
+
+    width: 100%;
+    word-break: break-all;
+  }
+
+  .output-text {
+    height: 48px;
   }
 
   input::placeholder {
-    color: #f0f0f080;
+    color: #0f0f0f80;
+  }
+
+  .mode {
+    padding: 8px 16px;
+    display: flex;
+    justify-content: center;
   }
 
   .mode-tag {
-    color: #f0f0f080;
-    background-color: #0f0f0f;
+    padding: 4px 8px;
+    margin: 0 4px;
+    outline: none;
+    cursor: pointer;
+    border-radius: 8px;
+    border: 1px solid transparent;
+
+    color: #0f0f0f80;
+    background-color: #ffffff;
   }
 
   .mode-tag-focus {
-    color: #f0f0f0;
-    background-color: #1f1f1f;
+    color: #0f0f0f;
+    background-color: #f0f0f0;
   }
 
   hr {
-    border-top: 1px solid #f0f0f050;
+    width: calc(100% - 16px);
+    border: none;
+    border-top: 1px solid #0f0f0f50;
   }
-}
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color: #f0f0f0;
+      background-color: #0f0f0f;
+      background: transparent;
+    }
+
+    .container {
+      background-color: #0f0f0f;
+    }
+
+    .output-text,
+    .input-input {
+      color: #f0f0f0;
+      background-color: #0f0f0f;
+    }
+
+    input::placeholder {
+      color: #f0f0f080;
+    }
+
+    .mode-tag {
+      color: #f0f0f080;
+      background-color: #0f0f0f;
+    }
+
+    .mode-tag-focus {
+      color: #f0f0f0;
+      background-color: #1f1f1f;
+    }
+
+    hr {
+      border-top: 1px solid #f0f0f050;
+    }
+  }
 </style>
