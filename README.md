@@ -11,3 +11,7 @@ There are three modes available: translation, proofreading, and completion, whic
 
 - Windows 11
 - OpenAPI or xAI API Token Key
+
+## Installtion
+
+Download it here (https://github.com/GossiperLoturot/quicklime/releases).
