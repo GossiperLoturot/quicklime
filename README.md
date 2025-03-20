@@ -1,7 +1,13 @@
-# Tauri + SvelteKit + TypeScript
+# Quicklime
 
-This template should help get you started developing with Tauri, SvelteKit and TypeScript in Vite.
+This app enables instant translation during text input across any application or window, facilitating the writing process to be more efficient and rapid.
 
-## Recommended IDE Setup
+<video controls src="video.mp4" title="video"></video>
 
-[VS Code](https://code.visualstudio.com/) + [Svelte](https://marketplace.visualstudio.com/items?itemName=svelte.svelte-vscode) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer).
+By pressing Ctrl+Space while entering text, you can access the input window.
+There are three modes available: translation, proofreading, and completion, which can be toggled using Ctrl+1, Ctrl+2, and Ctrl+3.
+
+## Requirement
+
+- Windows 11
+- OpenAPI or xAI API Token Key
